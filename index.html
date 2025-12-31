@@ -1,20 +1,489 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-	<meta charset="UTF-8">
-	<title>Document</title>
-	<link rel="stylesheet" type="text/css" href="css/style.css"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 新年快乐 - 烟花祝福</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #0a0a1a 0%, #1a1a3a 50%, #2a1a2a 100%);
+            overflow: hidden;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        #fireworks {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #year-display {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 150px;
+            font-weight: bold;
+            color: transparent;
+            background: linear-gradient(45deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #ff6b6b);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: gradientShift 3s ease infinite;
+            z-index: 2;
+            pointer-events: none;
+        }
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        #input-panel {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 15px;
+        }
+        #wish-input {
+            width: 300px;
+            padding: 15px 25px;
+            font-size: 18px;
+            border: none;
+            border-radius: 50px;
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            outline: none;
+        }
+        #wish-input::placeholder { color: rgba(255,255,255,0.5); }
+        #send-btn {
+            padding: 15px 35px;
+            font-size: 18px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #ff6b6b, #ffd93d);
+            color: #fff;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #send-btn:hover { transform: scale(1.05); }
+        #sound-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            font-size: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #sound-btn:hover { background: rgba(255,255,255,0.2); }
+        .floating-wish {
+            position: fixed;
+            font-size: 32px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 50;
+            animation: floatUp 4s ease-out forwards;
+            white-space: nowrap;
+        }
+        @keyframes floatUp {
+            0% { opacity: 0; transform: translateY(50px) scale(0.5); }
+            20% { opacity: 1; transform: translateY(0) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-150px) scale(0.8); }
+        }
+        #quick-wishes {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 600px;
+            z-index: 100;
+        }
+        .quick-btn {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            cursor: pointer;
+        }
+        .quick-btn:hover { background: rgba(255,255,255,0.25); }
+    </style>
 </head>
 <body>
-	<div class="wk"></div>
-    <div class="bj"></div>
-    <div class="ts"></div>
-    <div class="ss"></div>
-    <div class="main">
-        <ul>
-        	<li></li>
-        	<li></li>
-        </ul>
+    <canvas id="fireworks"></canvas>
+    <div id="year-display">2026</div>
+    <button id="sound-btn">🔊 音效</button>
+    
+    <div id="quick-wishes">
+        <button class="quick-btn">🎉 新年快乐</button>
+        <button class="quick-btn">🧧 恭喜发财</button>
+        <button class="quick-btn">💪 身体健康</button>
+        <button class="quick-btn">📈 事业有成</button>
+        <button class="quick-btn">💕 幸福美满</button>
+        <button class="quick-btn">🌟 心想事成</button>
+        <button class="quick-btn">🐍 蛇年大吉</button>
+        <button class="quick-btn">💰 财源广进</button>
     </div>
+    
+    <div id="input-panel">
+        <input type="text" id="wish-input" placeholder="输入你的新年祝福..." maxlength="20">
+        <button id="send-btn">🎆 发射祝福</button>
+    </div>
+
+    <script>
+    $(function() {
+        var canvas = document.getElementById('fireworks');
+        var ctx = canvas.getContext('2d');
+        var W, H;
+        var particles = [];
+        var rockets = [];
+        var MAX_PARTICLES = 800;
+        
+        // ========== 音效系统 ==========
+        var audioCtx = null;
+        var soundEnabled = true;
+        
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+        
+        // 发射音效 - 嗖的上升声
+        function playLaunch() {
+            if (!soundEnabled || !audioCtx) return;
+            try {
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.3);
+                
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch(e) {}
+        }
+        
+        // 爆炸音效 - 砰的爆炸声
+        function playExplode() {
+            if (!soundEnabled || !audioCtx) return;
+            try {
+                // 噪音爆炸
+                var bufferSize = audioCtx.sampleRate * 0.2;
+                var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                var data = buffer.getChannelData(0);
+                for (var i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+                }
+                
+                var noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                
+                var noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                
+                var filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 1000;
+                
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(audioCtx.destination);
+                noise.start();
+                
+                // 低频轰鸣
+                var osc = audioCtx.createOscillator();
+                var oscGain = audioCtx.createGain();
+                osc.connect(oscGain);
+                oscGain.connect(audioCtx.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+                
+                oscGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                oscGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch(e) {}
+        }
+        
+        // 点击页面初始化音频
+        $(document).one('click touchstart', function() {
+            initAudio();
+        });
+        
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        resize();
+        $(window).resize(resize);
+        
+        // 随机颜色
+        function randColor() {
+            var colors = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff9ff3','#feca57','#ff6348','#1dd1a1','#5f27cd','#00d2d3','#ff4757','#2ed573'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+        
+        // 火箭
+        function Rocket(x) {
+            this.x = x || Math.random() * W;
+            this.y = H;
+            this.vx = (Math.random() - 0.5) * 3;
+            this.vy = -10 - Math.random() * 5;
+            this.targetY = 100 + Math.random() * H * 0.35;
+            this.color = randColor();
+            this.dead = false;
+        }
+        
+        Rocket.prototype.update = function() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += 0.12;
+            
+            if (this.vy >= 0 || this.y <= this.targetY) {
+                this.explode();
+                this.dead = true;
+            }
+        };
+        
+        Rocket.prototype.draw = function() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = this.color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        };
+        
+        Rocket.prototype.explode = function() {
+            playExplode(); // 播放爆炸音效
+            var count = 60 + Math.floor(Math.random() * 40);
+            var hue = Math.random() * 360;
+            for (var i = 0; i < count; i++) {
+                if (particles.length >= MAX_PARTICLES) break;
+                var angle = (i / count) * Math.PI * 2;
+                var speed = 2 + Math.random() * 5;
+                particles.push(new Particle(
+                    this.x, this.y,
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed,
+                    'hsl(' + ((hue + Math.random() * 50) % 360) + ',100%,60%)'
+                ));
+            }
+        };
+        
+        // 粒子
+        function Particle(x, y, vx, vy, color) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.color = color;
+            this.alpha = 1;
+            this.decay = 0.015 + Math.random() * 0.015;
+        }
+        
+        Particle.prototype.update = function() {
+            this.vx *= 0.98;
+            this.vy *= 0.98;
+            this.vy += 0.04;
+            this.x += this.vx;
+            this.y += this.vy;
+            this.alpha -= this.decay;
+        };
+        
+        Particle.prototype.draw = function() {
+            ctx.globalAlpha = this.alpha;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        };
+        
+        // 发射烟花
+        function launch(x, silent) {
+            rockets.push(new Rocket(x));
+            if (!silent) playLaunch();
+        }
+        
+        // 主循环
+        function loop() {
+            // 半透明覆盖产生拖尾效果
+            ctx.fillStyle = 'rgba(10, 10, 26, 0.15)';
+            ctx.fillRect(0, 0, W, H);
+            
+            // 更新和绘制火箭
+            for (var i = rockets.length - 1; i >= 0; i--) {
+                rockets[i].update();
+                if (!rockets[i].dead) {
+                    rockets[i].draw();
+                } else {
+                    rockets.splice(i, 1);
+                }
+            }
+            
+            // 更新和绘制粒子
+            for (var j = particles.length - 1; j >= 0; j--) {
+                particles[j].update();
+                if (particles[j].alpha > 0) {
+                    particles[j].draw();
+                } else {
+                    particles.splice(j, 1);
+                }
+            }
+            
+            requestAnimationFrame(loop);
+        }
+        loop();
+        
+        // ========== 关键：多个定时器持续发射 ==========
+        // 定时器1
+        setInterval(function() { launch(); }, 300);
+        // 定时器2
+        setInterval(function() { launch(); }, 500);
+        // 定时器3
+        setInterval(function() { launch(); launch(); }, 700);
+        // 定时器4 - 保底
+        setInterval(function() { 
+            launch(); 
+            launch(); 
+        }, 400);
+        
+        // 初始发射
+        for (var k = 0; k < 8; k++) {
+            setTimeout(function() { launch(); }, k * 150);
+        }
+        
+        // 点击发射
+        $(canvas).click(function(e) {
+            launch(e.clientX);
+            launch(e.clientX + 50);
+            launch(e.clientX - 50);
+        });
+
+        // ========== 祝福文字系统 ==========
+        var wishColors = [
+            '#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', 
+            '#ff9ff3', '#feca57', '#1dd1a1', '#00d2d3'
+        ];
+        
+        function showWish(text) {
+            if (!text || !text.trim()) return;
+            
+            // 发射烟花
+            launch();
+            launch();
+            launch();
+            
+            var x = 10 + Math.random() * 60;
+            var y = 15 + Math.random() * 35;
+            var color = wishColors[Math.floor(Math.random() * wishColors.length)];
+            var rotation = (Math.random() - 0.5) * 30;
+            var size = 28 + Math.random() * 16;
+            
+            var $wish = $('<div class="floating-wish">')
+                .text(text)
+                .css({
+                    left: x + '%',
+                    top: y + '%',
+                    color: color,
+                    fontSize: size + 'px',
+                    transform: 'rotate(' + rotation + 'deg)',
+                    textShadow: '0 0 20px ' + color + ', 0 0 40px ' + color
+                });
+            
+            $('body').append($wish);
+            
+            // 颜色动态变化
+            var hue = Math.random() * 360;
+            var colorTimer = setInterval(function() {
+                hue = (hue + 8) % 360;
+                var c = 'hsl(' + hue + ',100%,60%)';
+                $wish.css({
+                    color: c,
+                    textShadow: '0 0 20px ' + c + ', 0 0 40px ' + c
+                });
+            }, 80);
+            
+            setTimeout(function() {
+                clearInterval(colorTimer);
+                $wish.remove();
+            }, 4000);
+        }
+        
+        // 发送祝福
+        $('#send-btn').click(function() {
+            var text = $('#wish-input').val().trim();
+            if (text) {
+                showWish(text);
+                $('#wish-input').val('');
+            }
+        });
+        
+        $('#wish-input').keypress(function(e) {
+            if (e.which === 13) {
+                $('#send-btn').click();
+            }
+        });
+        
+        // 快捷按钮
+        $('.quick-btn').click(function() {
+            showWish($(this).text());
+        });
+        
+        // 初始祝福
+        var initWishes = ['🎉 2026', '新年快乐', '🐍 蛇年大吉', '万事如意'];
+        var idx = 0;
+        function showInitWish() {
+            if (idx < initWishes.length) {
+                showWish(initWishes[idx]);
+                idx++;
+                setTimeout(showInitWish, 2500);
+            }
+        }
+        setTimeout(showInitWish, 1500);
+        
+        // 随机祝福
+        var randomWishes = ['🎊 Happy 2026', '✨ 幸福安康', '🌈 前程似锦', '🎁 好运连连', '💫 蛇年行大运', '🧨 爆竹声声', '🏮 阖家欢乐'];
+        setInterval(function() {
+            if (Math.random() > 0.4) {
+                showWish(randomWishes[Math.floor(Math.random() * randomWishes.length)]);
+            }
+        }, 4000);
+        
+        console.log('🎆 2026新年烟花已启动！烟花会一直放！');
+    });
+    </script>
 </body>
 </html>
